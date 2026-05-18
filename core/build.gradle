@@ -1,0 +1,20 @@
+dependencies {
+    implementation "io.temporal:temporal-sdk:${javaSDKVersion}"
+    implementation 'org.slf4j:slf4j-simple:2.0.12'
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
+
+    testImplementation "io.temporal:temporal-testing:${javaSDKVersion}"
+    testImplementation 'io.temporal:temporal-test-server:1.27.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+}
+
+task execute(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = project.findProperty('mainClass') ?: 'io.temporal.samples.ledger.LedgerWorker'
+    if (project.hasProperty('arg')) {
+        args project.property('arg')
+    }
+}
