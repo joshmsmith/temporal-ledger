@@ -83,8 +83,14 @@ void_payment   (Update)  ──► VOIDED
 
 ### Prerequisites
 
-- Java 17
+- Python 3.11+
 - [Temporal CLI](https://docs.temporal.io/cli) installed and on your PATH
+
+### Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
 
 ### Run the dev server
 
@@ -101,13 +107,13 @@ bash scripts/setup.sh
 ### Start the worker
 
 ```bash
-./gradlew -q execute
+python -m payments_ledger.worker
 ```
 
-### Run the starter (opens an account + submits a deposit)
+### Run the example client (opens a ledger + submits a payment through the full approval flow)
 
 ```bash
-./gradlew -q execute -PmainClass=io.temporal.samples.ledger.LedgerStarter
+python -m payments_ledger.client
 ```
 
 ---
@@ -123,24 +129,20 @@ bash scripts/setup.sh
 
 ## Activity integration points
 
-Each activity in `LedgerActivitiesImpl` is stubbed with a log statement and a short sleep. In production, replace them with:
+Each activity in `payments_ledger/activities/ledger_activities.py` writes to a local SQLite database. In production, replace them with:
 
 | Activity | Integration |
 |---|---|
-| `createAccount` | Account database (Postgres, etc.) |
-| `validateTransaction` | Rules engine / limit service |
-| `screenTransaction` | Fraud / AML vendor API (heartbeating) |
-| `reserveFunds` | Account store hold API |
-| `postLedgerEntry` | Double-entry ledger DB |
-| `releaseFunds` | Account store release API |
-| `reverseLedgerEntry` | Ledger reversal / correction API |
-| `notifyParties` | Email / push notification service |
-| `logAuditEvent` | Immutable audit log / SIEM |
+| `post_to_ledger_db` | Double-entry ledger DB (Postgres, etc.) |
+| `notify_approver` | Email / push / ticketing system |
+| `send_payment_confirmation` | Email / push notification service |
+| `log_fraud_clearance` | Immutable audit log / SIEM |
+| `reconcile_external` | External settlement / reconciliation API |
 
 ---
 
 ## Running tests
 
 ```bash
-./gradlew test
+pytest
 ```
