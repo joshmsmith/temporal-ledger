@@ -80,6 +80,14 @@ temporal-ledger/
 
 ---
 
+## Workflow in action
+
+The Temporal UI timeline view after running `python -m payments_ledger.client` — showing `reserve_funds`, fraud check, the 24 h approval timer (yellow), `approve_payment`, ledger post, and the final `POSTED` result:
+
+![PaymentWorkflow timeline](assets/ledger_workflow_timeline.png)
+
+---
+
 ## Getting started
 
 ### Prerequisites
