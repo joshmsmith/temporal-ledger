@@ -144,6 +144,15 @@ Each activity in `payments_ledger/activities/ledger_activities.py` writes to a l
 
 ---
 
+## Related Financial Examples
+
+| Sample | Language | What it shows |
+|---|---|---|
+| [temporal-kyc-sample](https://github.com/joshmsmith/temporal-kyc-sample) | Java | Customer onboarding / KYC flow — long-running human-in-the-loop workflow with compliance review, 30-day SLA timer, and audit trail |
+| [temporal-latency-optimization-scenarios](https://github.com/temporal-sa/temporal-latency-optimization-scenarios) | Java / Go | Real-time payment latency patterns — update-with-start with local activities for minimum round-trip latency, eager workflow start |
+
+---
+
 ## Running tests
 
 ```bash
