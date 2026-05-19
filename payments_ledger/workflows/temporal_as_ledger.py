@@ -48,23 +48,6 @@ _OPEN_STATES = frozenset({
 })
 
 
-def _to_entry(raw) -> LedgerEntry:
-    """Convert a dict (Temporal deserialised) or a LedgerEntry back to LedgerEntry."""
-    if isinstance(raw, LedgerEntry):
-        return raw
-    return LedgerEntry(
-        entry_id=raw["entry_id"],
-        amount=raw["amount"],
-        entry_type=EntryType(raw["entry_type"]),
-        reference=raw["reference"],
-        state=EntryState(raw["state"]),
-        metadata=raw.get("metadata", {}),
-        approver_id=raw.get("approver_id"),
-        approved_by=raw.get("approved_by"),
-        rejection_reason=raw.get("rejection_reason"),
-    )
-
-
 @workflow.defn
 class PaymentLedgerWorkflow:
 
@@ -74,12 +57,11 @@ class PaymentLedgerWorkflow:
         self._currency: str = init.currency
         self._balance: Decimal = Decimal(init.opening_balance)
         self._reserved: Decimal = Decimal(init.reserved_balance)
-        self._entries: dict[str, LedgerEntry] = {}
-
-        # Restore in-flight entries carried across a Continue-as-New boundary.
-        for raw in init.open_entries:
-            entry = _to_entry(raw)
-            self._entries[entry.entry_id] = entry
+        # pydantic_data_converter deserialises open_entries as List[LedgerEntry]
+        # already, so no manual reconstruction is needed.
+        self._entries: dict[str, LedgerEntry] = {
+            e.entry_id: e for e in init.open_entries
+        }
 
     # -------------------------------------------------------------------------
     # Main run loop
@@ -269,7 +251,14 @@ class PaymentLedgerWorkflow:
 
         await workflow.execute_activity(
             post_to_ledger_db,
-            args=[workflow.info().workflow_id, entry, str(self._balance)],
+            args=[
+                workflow.info().workflow_id,
+                entry.entry_id,
+                entry.amount,
+                entry.entry_type.value,
+                entry.state.value,
+                str(self._balance),
+            ],
             start_to_close_timeout=timedelta(seconds=30),
         )
 

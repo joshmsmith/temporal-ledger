@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 
 from temporalio import activity
 
-from payments_ledger.models import LedgerEntry
-
 _DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "ledger.db")
 _thread_local = threading.local()
 
@@ -59,6 +57,17 @@ def _db() -> sqlite3.Connection:
                 passed          INTEGER NOT NULL,
                 logged_at       TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS fund_reservations (
+                idempotency_key TEXT PRIMARY KEY,
+                workflow_id     TEXT NOT NULL,
+                entry_id        TEXT NOT NULL,
+                amount          TEXT NOT NULL,
+                entry_type      TEXT NOT NULL,
+                status          TEXT NOT NULL,  -- RESERVED or RELEASED
+                reason          TEXT NOT NULL DEFAULT '',
+                created_at      TEXT NOT NULL
+            );
             """
         )
         conn.commit()
@@ -73,17 +82,18 @@ def _now() -> str:
 @activity.defn
 def post_to_ledger_db(
     workflow_id: str,
-    entry: LedgerEntry,
+    entry_id: str,
+    amount: str,
+    entry_type: str,
+    state: str,
     new_balance: str,
 ) -> bool:
     """
     Upsert an approved ledger entry and its resulting balance.
     Idempotency key: (workflow_id, entry_id).
+    Accepts plain string fields to avoid dataclass deserialization edge-cases.
     """
-    idempotency_key = f"{workflow_id}:{entry.entry_id}"
-    entry_type = entry.entry_type.value if hasattr(entry.entry_type, "value") else entry.entry_type
-    state = entry.state.value if hasattr(entry.state, "value") else entry.state
-
+    idempotency_key = f"{workflow_id}:{entry_id}"
     conn = _db()
     conn.execute(
         """
@@ -91,12 +101,12 @@ def post_to_ledger_db(
             (idempotency_key, workflow_id, entry_id, amount, entry_type, state, balance, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (idempotency_key, workflow_id, entry.entry_id, entry.amount, entry_type, state, new_balance, _now()),
+        (idempotency_key, workflow_id, entry_id, amount, entry_type, state, new_balance, _now()),
     )
     conn.commit()
     activity.logger.info(
         "post_to_ledger_db: entry=%s workflow=%s balance=%s",
-        entry.entry_id, workflow_id, new_balance,
+        entry_id, workflow_id, new_balance,
     )
     return True
 
@@ -187,6 +197,65 @@ def log_fraud_clearance(
     activity.logger.info(
         "log_fraud_clearance: entry=%s passed=%s risk_score=%s",
         entry_id, passed, risk_score,
+    )
+    return True
+
+
+@activity.defn
+def reserve_funds(
+    workflow_id: str,
+    entry_id: str,
+    amount: str,
+    entry_type: str,
+) -> bool:
+    """
+    Record a funds reservation for a debit payment.
+    Idempotency key: reserve:{workflow_id}:{entry_id}.
+    """
+    idempotency_key = f"reserve:{workflow_id}:{entry_id}"
+    conn = _db()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO fund_reservations
+            (idempotency_key, workflow_id, entry_id, amount, entry_type, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'RESERVED', ?)
+        """,
+        (idempotency_key, workflow_id, entry_id, amount, entry_type, _now()),
+    )
+    conn.commit()
+    activity.logger.info(
+        "reserve_funds: entry=%s amount=%s type=%s",
+        entry_id, amount, entry_type,
+    )
+    return True
+
+
+@activity.defn
+def release_funds(
+    workflow_id: str,
+    entry_id: str,
+    amount: str,
+    entry_type: str,
+    reason: str,
+) -> bool:
+    """
+    Record a funds release (reservation voided due to rejection/fraud failure).
+    Idempotency key: release:{workflow_id}:{entry_id}.
+    """
+    idempotency_key = f"release:{workflow_id}:{entry_id}"
+    conn = _db()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO fund_reservations
+            (idempotency_key, workflow_id, entry_id, amount, entry_type, status, reason, created_at)
+        VALUES (?, ?, ?, ?, ?, 'RELEASED', ?, ?)
+        """,
+        (idempotency_key, workflow_id, entry_id, amount, entry_type, reason, _now()),
+    )
+    conn.commit()
+    activity.logger.info(
+        "release_funds: entry=%s amount=%s reason=%s",
+        entry_id, amount, reason,
     )
     return True
 
