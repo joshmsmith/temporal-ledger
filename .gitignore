@@ -33,3 +33,8 @@ gradle.properties
 # Virtual machine crash logs
 hs_err_pid*
 replay_pid*
+
+# Local-only design/planning files
+design.md
+todo.md
+Design & Best Practices Guide.md
